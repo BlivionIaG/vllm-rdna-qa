@@ -7,19 +7,17 @@ description: use this when checking ROCm pin / capture runtime / AR Uncached / c
 
 Wiki:
 [rdna-allreduce.md](https://github.com/BlivionIaG/rdna-hip-wiki/blob/main/silicon/rdna-allreduce.md),
-[graph-capture.md](https://github.com/BlivionIaG/rdna-hip-wiki/blob/main/silicon/graph-capture.md).
+[graph-capture.md](https://github.com/BlivionIaG/rdna-hip-wiki/blob/main/silicon/graph-capture.md),
+[toolchain](https://github.com/BlivionIaG/rdna-hip-wiki/tree/main/toolchain).
 
-1. **Pin ROCm 7.14**, `hipcc`, gfx1030, wave32. Match hippihx
-   `HIPPIHX_ROCM_PIN`. Do not silently retarget dest.
-2. Pre-alloc + zero + persist CAPTURE **before** `BeginCapture`.
-   Illegal on the captured stream: `hipMalloc` / grow, `.item()` /
-   D2H, `WaitValue*`. See
+1. **Live pin ROCm 7.14:** `hipcc --offload-arch=gfx1030 -O3` wave32.
+   Nightly / TheRock = **watch only**. Never a silent dest bump.
+2. **Pre-alloc before `BeginCapture`.** No `malloc` / `.item()` / D2H /
+   `WaitValue*` in capture. **Hard-fail leftover `_ensure` under
+   capture** (do not probe). See
    [`rdna-graph-qa`](../rdna-graph-qa/SKILL.md).
-3. AR staging is `hipDeviceMallocUncached`. **Leave Finegrained**
-   (silent no-op on this part). Push, not pull. `VLLM_RDNA_AR=0`
-   default.
-4. After dest extras or a fatbin moves:
-   `rm -rf ~/.cache/vllm ~/.cache/torch_extensions`. Stale
-   `torch_extensions` is not dest-signed.
-5. One `--offload-arch` per fatbin. No `HSA_OVERRIDE`.
-   [`rdna-silicon-gate`](../rdna-silicon-gate/SKILL.md).
+3. **Uncached AR staging.** Leave Finegrained. **Persist CAPTURE**
+   arenas vs allocator recycle (mempool reuse is a dest bug).
+4. After tip moves: wipe `~/.cache/vllm` and torch HIP
+   `torch_extensions/*.so`. One `--offload-arch` per fatbin. **No
+   `HSA_OVERRIDE`.** [`rdna-silicon-gate`](../rdna-silicon-gate/SKILL.md).
