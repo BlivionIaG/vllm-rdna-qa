@@ -7,22 +7,19 @@ description: use this when reviewing HIP/ISA on a dest commit or fatbin.
 
 Depth:
 [rdna-hip-wiki silicon](https://github.com/BlivionIaG/rdna-hip-wiki/tree/main/silicon).
-Do not paste the wiki. No tok/s.
+No wiki paste. No tok/s.
 
-1. Inner ops: **`fdot2` / `sdot4`**, wave32. No `fdot2.bf16`. Bind on
-   arch + wave.
-2. **LDS ≤ 64 KiB** / WG. 64 × 4 B banks.
-3. **`K_STEP` matches packed DOT.** ConfigA (`K_STEP=32`) dest.
-   ConfigH (`K_STEP=64`) Leave.
-4. One `--offload-arch` per fatbin. **Never `HSA_OVERRIDE`.**
-5. **Leave** WMMA / MFMA / TMA and `#ifdef WMMA` on shared DOT.
-6. Family binds: Qwen GDN tiles (`gated_rms` / `causal_conv1d_fwd`)
-   ≠ GLM KDA ≠ M-RoPE ≠ DeepSeek 2D-RoPE. Separate hsaco; **never
-   transplant**.
-7. Page-commit / spill: outs and GDN state need **zeros not empty**.
-   Reject `.sgpr_spill_count > 0` / VGPR spill as latency poison.
-8. **gfx1013 Later:** BC-250 is Cyan Skillfish, not gfx906. **VERIFY
-   wave size** before sharing `dot.hpp` with gfx1030. Never
-   `HSA_OVERRIDE`.
-9. Runtime pin / Uncached AR / cache wipe:
-   [`rdna-hip-runtime`](../rdna-hip-runtime/SKILL.md).
+1. **`fdot2` / `sdot4`**, wave32. One `--offload-arch`. Never
+   `HSA_OVERRIDE`. Leave WMMA / TMA / `#ifdef WMMA` on shared DOT.
+2. **`K_STEP` = packed DOT coverage.** ConfigA dest. ConfigH half-K
+   Leave (`7ac98a26`).
+3. **LDS=0** ConfigA/C OK for W4 prefill. Else LDS ≤ 64 KiB. AWQ
+   `zero_offset=0` via `use_v2_format` (`aaaae85`).
+4. Out-stride + `NULL_BLOCK` on `causal_conv1d_fwd` (`82b6f18`).
+   **M-RoPE ≠ 2D-RoPE** (`cf055ad1`). Qwen GDN tiles ≠ GLM KDA.
+   Separate hsaco; never transplant.
+5. Outs / GDN state: **zeros not empty**. Reject
+   `.sgpr_spill_count > 0` / VGPR spill.
+6. **gfx1013 Later:** BC-250 is Cyan Skillfish, not gfx906. VERIFY
+   wave before sharing `dot.hpp` with gfx1030.
+7. **Leave** µs/tok and permanent TP≤2 / breakable CG as dest.
