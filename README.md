@@ -36,5 +36,8 @@ MFMA / TMA.
 5. [Residuals — three tracks, never collapse](docs/04-residuals.md)
 6. [Family binds — GDN ≠ KDA ≠ M-RoPE ≠ 2D-RoPE](docs/05-family-binds.md)
 7. [Soak matrix — TP × eager / graph / APC](docs/06-soak-matrix.md)
+8. [HIP runtime — ROCm pin, capture, cache wipe](docs/07-hip-runtime.md)
+9. [HTTP clients — OpenAI-compat only](docs/08-http-clients.md)
+10. [Arch families — registry, never PARK across](docs/09-arch-families.md)
 
 How to expand a stub: [CONTRIBUTING.md](CONTRIBUTING.md).

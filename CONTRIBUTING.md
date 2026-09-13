@@ -32,8 +32,9 @@ chapters as if they were a contract.
 
 1. Keep the heading. Fill the `TODO` under it. Do not invent a parallel
    page for the same gate.
-2. Engine specialist owns residuals, graph QA, family binds, soak.
-3. Silicon specialist owns ISA dest and tile contracts.
+2. Engine specialist owns residuals, graph QA, family binds, soak,
+   HTTP clients, arch-family registry.
+3. Silicon specialist owns ISA dest, tile contracts, and HIP runtime.
 4. Mark dest-signed vs harvest vs Leave. Never collapse the three
    residuals ([docs/04-residuals.md](docs/04-residuals.md)).
 5. Never land a **TP≤2 gate** or **Triton as dest**. Triton may exist as

@@ -17,6 +17,10 @@ Zoo directories are **classes**, not SKUs: `gdn_scan`, `kda_scan`,
 
 **Qwen GDN ≠ GLM KDA ≠ M-RoPE ≠ DeepSeek 2D-RoPE.**
 
+Expanded registry (Qwen3.x / `qwen4_exp` / Glm5Next / `deepseek_v4` /
+`deepseek_v41`): [09-arch-families.md](09-arch-families.md). Never PARK
+across.
+
 GDN 16/48 layouts do **not** retarget onto KDA 64×128. Causal conv
 (`sequence/causal_conv`, `state_len≈4`) is **not** under `gdn_scan`.
 
