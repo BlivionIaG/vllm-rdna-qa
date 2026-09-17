@@ -1,6 +1,6 @@
 ---
 name: rdna-http-clients
-description: use this when wiring a client (OmO, OMP, LiteLLM, OpenCode, Codex, custom) to the gfx1030 dest fork's HTTP server.
+description: use this when wiring a client (OmO, OMP, LiteLLM, OpenCode, Codex, custom) to the gfx1030 dest fork's HTTP server. Not for kernels, fatbins, or VLLM_* dest knobs.
 ---
 
 # HTTP clients
@@ -152,7 +152,7 @@ curl -fsS http://<server>:<port>/v1/completions \
 If (1) returns the model id and (2) returns non-empty
 `choices[0].text`, the server is healthy. If (1) works but (2)
 returns garbage / NaN / constant token / hangs, see
-[rdna-graph-qa §7](rdna-graph-qa/SKILL.md).
+[rdna-graph-qa §7](../rdna-graph-qa/SKILL.md).
 
 ## 6. Probe hygiene
 
@@ -191,9 +191,9 @@ benchmark, not client. The client just sends requests.
 | Symptom | What to do |
 |---|---|
 | 502 / 503 | Server not ready. Retry with backoff. Check `GET /v1/models` |
-| 200 with constant token ("duct", etc.) | Server up, kernel broken. [rdna-graph-qa §7](rdna-graph-qa/SKILL.md) |
+| 200 with constant token ("duct", etc.) | Server up, kernel broken. [rdna-graph-qa §7](../rdna-graph-qa/SKILL.md) |
 | 200 with empty `choices` | Prompt too long for context. Reduce input or raise `--max-model-len` on the **server** |
-| 200 with NaN logprobs | Attention / sampler broken. [rdna-graph-qa §7](rdna-graph-qa/SKILL.md) |
+| 200 with NaN logprobs | Attention / sampler broken. [rdna-graph-qa §7](../rdna-graph-qa/SKILL.md) |
 | 60-second timeout | Server hung. Check dmesg for `Runlist is getting oversubscribed` |
 | Connection refused | Server down. Re-launch |
 
