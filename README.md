@@ -24,11 +24,11 @@ description matches the task.
 
 | Skill | Fires |
 |---|---|
-| [`rdna-dest-review`](skills/rdna-dest-review/SKILL.md) | use this when reviewing/landing a dest commit on opengfx1030/vllm-rdna rdna_extras. |
-| [`rdna-graph-qa`](skills/rdna-graph-qa/SKILL.md) | use this when debugging or reviewing cudagraph/HIP graph capture on gfx1030 dest. |
-| [`rdna-silicon-gate`](skills/rdna-silicon-gate/SKILL.md) | use this when reviewing HIP/ISA on a dest commit or fatbin. |
-| [`rdna-hip-runtime`](skills/rdna-hip-runtime/SKILL.md) | use this when checking ROCm pin / capture runtime / AR Uncached / cache wipe after tip move. |
-| [`rdna-arch-family`](skills/rdna-arch-family/SKILL.md) | use this when a model family hits the board (Qwen GDN/QSA, GLM KDA/DSA, deepseek_v4 vs v41). |
-| [`rdna-http-clients`](skills/rdna-http-clients/SKILL.md) | use this when wiring OmO/OMP/LiteLLM/OpenCode to the fork. |
+| [`rdna-dest-review`](skills/rdna-dest-review/SKILL.md) | use this when reviewing/landing a dest commit on opengfx1030/vllm-rdna rdna_extras. Not for HTTP clients, fatbin ISA, or wiki drafts. |
+| [`rdna-graph-qa`](skills/rdna-graph-qa/SKILL.md) | use this when debugging or reviewing cudagraph/HIP graph capture on gfx1030 dest. Not for ROCm pin, fatbin ISA, or HTTP clients. |
+| [`rdna-silicon-gate`](skills/rdna-silicon-gate/SKILL.md) | use this when reviewing HIP/ISA on a dest commit or fatbin. Not for landing classification, ROCm pin, or HTTP clients. |
+| [`rdna-hip-runtime`](skills/rdna-hip-runtime/SKILL.md) | use this when checking ROCm pin / capture runtime / AR Uncached / cache wipe after tip move. Not for tile ISA, family registry, or HTTP clients. |
+| [`rdna-arch-family`](skills/rdna-arch-family/SKILL.md) | use this when a model family hits the board (Qwen GDN/QSA, GLM KDA/DSA, deepseek_v4 vs v41). Not for dest landing, HIP/ISA, or HTTP clients. |
+| [`rdna-http-clients`](skills/rdna-http-clients/SKILL.md) | use this when wiring OmO/OMP/LiteLLM/OpenCode (or any HTTP client) to vllm-rdna serve. Not for kernels, fatbins, or VLLM_* dest knobs. |
 
 Add a skill: [CONTRIBUTING.md](CONTRIBUTING.md).

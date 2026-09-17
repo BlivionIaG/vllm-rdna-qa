@@ -21,15 +21,18 @@ notes stay in
    ```
 
    `description` is **one line** and **starts with** `use this when`.
+   End with `Not for …` when another skill owns that task.
 3. Body: a short recipe. Hard rules, a table if needed, links out.
    Point at the wiki or `arch-research/…/BRIEF.md`. Do not paste wikis
    or papers.
 4. List the skill and its description in [README.md](README.md).
 5. Keep it short. If it needs a chapter, it is the wrong shape.
+6. **One owner per hard rule.** Other skills point; they do not recopy
+   the recipe. Do not merge skills to save files.
 
 Do not add `docs/00-…` chapter stubs. Do not treat tok/s as dest.
 Never collapse the three residuals. Never land TP≤2 `can_implement` or
-Triton as dest.
+Triton **W4/KV** as dest.
 
 ## Attribution
 
