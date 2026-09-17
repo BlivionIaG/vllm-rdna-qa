@@ -1,6 +1,6 @@
 ---
 name: rdna-graph-qa
-description: use this when debugging or reviewing cudagraph / HIP graph capture on gfx1030 dest.
+description: use this when debugging or reviewing cudagraph / HIP graph capture on gfx1030 dest. Not for ROCm pin, fatbin ISA, or HTTP clients.
 ---
 
 # Graph QA
@@ -42,9 +42,9 @@ Every state tensor the captured graph reads must be allocated
 ever need:
 
 ```python
-# at init, NOT inside forward
-self.kv_cache_arena = torch.empty(max_bs, num_kv_heads, ...)
-self.state_arena   = torch.empty(max_bs, state_dim, ...)
+# at init, NOT inside forward — zeros, not empty (page-commit)
+self.kv_cache_arena = torch.zeros(max_bs, num_kv_heads, ...)
+self.state_arena   = torch.zeros(max_bs, state_dim, ...)
 
 # during capture: slice from the arena, no allocation
 kv = self.kv_cache_arena[:current_batch]
@@ -74,6 +74,13 @@ captured graph, **eager** every step, or
 `@eager_break_during_capture`-decorated. Any other path means the
 captured graph references a stale arena.
 
+No shared `PersistBuf` across live projection outs (`c350fa21`).
+Write the **CAPTURE** slot on replay (`f7761592`); eager slot only
+for larger prefill.
+
+Never a one-shot decode wipe of live GDN state (`388a61b6`) —
+alloc zeros, do not sanitizer-zero after prefill.
+
 ## 4. `eager_break_during_capture` — admission, not a fix
 
 Use the decorator for kernels that are genuinely unsafe to capture:
@@ -85,24 +92,27 @@ let me just decorator it". The fix for crashes inside capture is a
 captured-safe kernel. Decorating-by-default means the captured
 graph no longer reflects the kernel under test.
 
+Hybrid GDN/PLE capture mode: [rdna-dest-review §7](../rdna-dest-review/SKILL.md).
+`VLLM_CG_NAN_INPUT_CHECK` default **off** (D2H class, `b7c77f08`).
+
 ## 5. State rings ≠ KV cache
 
 GDN, KDA, DSA, Lightning, Engram, CED, indexer — these are all
 **state rings separate from the KV cache**. They are paged (or
 pooled), they are per-request, and they are **not shared by APC**.
 Full state-ring map and dual page-commit ritual:
-[rdna-arch-family §3, §4](rdna-arch-family/SKILL.md).
+[rdna-arch-family §3, §4](../rdna-arch-family/SKILL.md).
 
 The KV allocator and the state allocator are two different objects.
 A state-ring allocation must **not** route through the KV allocator.
 
 ## 6. Family binds in capture path
 
-`causal_conv1d_fwd`, `gated_rms`, `mrope_rdna2`, `qsa_rdna2` are
-**Qwen-GDN only**. Don't transplant them into a GLM KDA or
-pure-M-RoPE capture path — tile shapes, head dims, bias formats
-differ. Separate `.hsaco` per family. Cross-ref:
-[rdna-arch-family §2](rdna-arch-family/SKILL.md).
+`causal_conv1d_fwd`, `gated_rms` are **Qwen-GDN only**. Qwen4Exp
+HC/QSA/PLE HIP is a different family bind and stays default-off.
+Don't transplant GDN tiles into GLM KDA. Separate `.hsaco` per
+family. Cross-ref:
+[rdna-arch-family §2](../rdna-arch-family/SKILL.md).
 
 ## 7. Cudagraph garbage triage
 

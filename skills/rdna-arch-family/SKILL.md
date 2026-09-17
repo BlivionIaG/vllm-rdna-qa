@@ -1,6 +1,6 @@
 ---
 name: rdna-arch-family
-description: use this when a new model family hits the board (Qwen GDN/QSA, GLM KDA/DSA, M-RoPE, DeepSeek v4 / v4.1) on the gfx1030 dest fork.
+description: use this when a new model family hits the board (Qwen GDN/QSA, GLM KDA/DSA, M-RoPE, DeepSeek v4 / v4.1) on the gfx1030 dest fork. Not for dest landing, HIP/ISA, or HTTP clients.
 ---
 
 # Arch family
@@ -62,8 +62,8 @@ When a family has two independent state rings (Qwen-GDN has
 `ssm_state` and `conv_state`), each ring needs its own page-commit:
 
 - `slot 0 = NULL_BLOCK_ID` for each
-- Zero-initialised on first use
-- Re-zeroed on free
+- Zero-initialised at **alloc** (page-commit)
+- Never a one-shot decode wipe of live GDN state (`388a61b6`)
 
 Skip the page-commit for one ring → the other reads garbage from
 a previous request's state. Symptom: "first request correct,
@@ -96,21 +96,23 @@ state leaked through the missing ring.
 | RMSNorm | AOT `vllm::rocm_layernorm::rms_norm` | `csrc/rocm/layernorm.cu` |
 
 A kernel being present in the tree does **not** mean it is
-enabled. Each has a Python-side gate, usually an env var with
-sensible default-on / default-off. See the kernel file's top
-comment or the dispatcher in the model code.
+enabled. Qwen4Exp HC / QSA / PLE / fused_glue stay **default-off**
+until capture-safe (wiki
+[qwen4exp-flash-next-hip.md](https://github.com/BlivionIaG/rdna-hip-wiki/blob/main/kernels/qwen4exp-flash-next-hip.md)).
+GDN prefill HIP is opt-in (`VLLM_GDN_HIP_PREFILL`).
 
 ## 6. CSA2 / Lightning / QSA / MLA — distinct mechanisms
 
 | Mechanism | What it does | Family |
 |---|---|---|
-| CSA2 | compressed shared attention (state space) | DeepSeek v4 |
-| Lightning | one-step attention (Lightning Attention) | DeepSeek v4 |
-| QSA | Qwen sparse attention | Qwen3-Next, Qwen4-exp |
-| MLA | Multi-head Latent Attention (compressed KV) | DeepSeek v2/v3 |
+| Lightning | v4 sparse / one-step path | `deepseek_v4` |
+| CSA2 Full / Reindex / Reuse | v4.1 indexer modes | `deepseek_v41` |
+| CED / Engram | v4.1 encoder + host tables | `deepseek_v41` |
+| QSA | Qwen sparse attention | Qwen3-Next, Qwen4Exp |
+| MLA | compressed KV | DeepSeek v2/v3/v4 decode |
 
-CSA2 ≠ Lightning ≠ QSA ≠ MLA. State shapes, head dims, update
-rules differ. Don't merge or alias them in the dispatcher.
+CSA2 ≠ Lightning ≠ QSA ≠ MLA. `deepseek_v4` ≠ `deepseek_v41`.
+Don't merge or alias them in the dispatcher.
 
 ## 7. New-family checklist
 
@@ -130,7 +132,7 @@ When `config.json` says a model is a new family:
 7. Page-commit every state ring (§4).
 8. APC compatibility — state rings do not share; KV cache does.
 9. Soak matrix: TP=2/TP=4 × eager/graph × 1k/16k × c=1..16. See
-   [rdna-dest-review §7](rdna-dest-review/SKILL.md).
+   [rdna-dest-review §7](../rdna-dest-review/SKILL.md).
 
 ## 8. bf16 leftovers
 

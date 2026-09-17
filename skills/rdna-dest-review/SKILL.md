@@ -1,6 +1,6 @@
 ---
 name: rdna-dest-review
-description: use this when reviewing or landing a dest commit on opengfx1030/vllm-rdna rdna_extras.
+description: use this when reviewing or landing a dest commit on opengfx1030/vllm-rdna rdna_extras. Not for HTTP clients, fatbin ISA, or wiki drafts.
 ---
 
 # Dest review
@@ -29,8 +29,8 @@ Gate every dest change with `on_gfx10x()` (or stricter
 4. `CMakeLists.txt` — source list (avoid pulling gfx1030-only `.cu` into CDNA builds)
 
 A missing gate that compiles on CDNA is a silent correctness bug on
-MI300X. Test on at least one non-RDNA arch before merge (CDNA
-gfx942 preferred, else CPU).
+MI300X. Dest soak is gfx1030; do not block a dest land on a gfx942
+box you do not have.
 
 **Never PR to `vllm-project/vllm`.** Dest extras live on
 opengfx1030. "Present on tip" is not dest.
@@ -40,7 +40,7 @@ opengfx1030. "Present on tip" is not dest.
 A tile shape that works for Qwen GDN does not work for GLM KDA,
 M-RoPE, or DeepSeek 2D-RoPE. The kernel zoo at `csrc/rocm/` is
 family-scoped; the dispatcher at `vllm/model_executor/models/`
-decides which fires. Full map: [rdna-arch-family](rdna-arch-family/SKILL.md).
+decides which fires. Full map: [rdna-arch-family](../rdna-arch-family/SKILL.md).
 
 Reject any PR that transplants a family tile across families
 without a written justification in the commit body.
@@ -80,41 +80,49 @@ Use `splitting_ops` to keep the boundary explicit.
   Mixing Triton + HIP `reshape_and_cache` in the same captured
   graph produces constant-token garbage output.
 
-Full capture invariants: [rdna-graph-qa](rdna-graph-qa/SKILL.md).
+Full capture invariants: [rdna-graph-qa](../rdna-graph-qa/SKILL.md).
 
 ## 7. Soak matrix
 
-Every dest kernel touching the forward path must pass:
+Pass = coherent output, no NaN, no faults. **tok/s is not dest.**
 
-| Cell | Pass criteria |
+| Cell | Notes |
 |---|---|
-| TP=2 eager, 16k in / 1k out × 8 prompts | No NaN, decode tok/s ≥ previous tip |
-| TP=4 eager, 16k in / 1k out × 8 prompts | No NaN, decode tok/s ≥ previous tip |
-| TP=2 cg (FULL_AND_PIECEWISE) | Coherent output, no faults |
-| TP=4 cg (FULL_AND_PIECEWISE) | Coherent output, no faults |
-| APC on, 8 × 16k shared prefix | Coherent, no shared-state NaN |
+| TP=2 / TP=4 × eager | kernel correctness |
+| TP=2 / TP=4 × graph | family capture mode (below) |
+| APC / 16k shared prefix | hybrid state≠KV cell |
 
-The hybrid APC cell catches residual state-corruption bugs that
-short contexts miss.
+Capture mode is family-specific (dest launchers):
+
+- Qwen3.8-27B hybrid GDN: `FULL_AND_PIECEWISE` + breakable CG
+  (`serve_gfx1030_full.sh`)
+- Qwen4Exp / Flash-Next: **PIECEWISE** + prefix;
+  `FULL_AND_PIECEWISE` is Leave until Qwen4Exp FULL is dest
+  (`serve_gfx1030_flashnext.sh`)
+- Production `max-num-seqs` **6** until GDN batched-decode at 8
+  is dest (`b78006a`)
 
 ## 8. Triage / opt-in markers — never promote
 
-These are default-off, never dest. If a PR promotes any of these
-to default-on, the burden of proof is on the PR ("what changed
-that makes the larger world safe now?").
+Default-off, never dest, unless a launcher already flipped them
+with a soak:
 
-- `VLLM_RDNA_AR` (one-shot custom AR — distinct from
-  `VLLM_FORCE_CUSTOM_ALL_REDUCE`, which **is** dest-default in
-  the launcher)
-- `VLLM_ROCM_MOE_SKINNY` (MoE skinny GEMV)
-- `VLLM_USE_BREAKABLE_CUDAGRAPH` outside the documented cell
+- `VLLM_RDNA_AR` (one-shot Uncached AR — **opt-in**, `e0a7b167`)
+- `VLLM_ROCM_MOE_SKINNY`
+- `VLLM_RDNA_HC_PREFILL_HIP` / `VLLM_RDNA_QSA_HIP` /
+  `VLLM_RDNA_PLE_CONV_HIP` / `VLLM_RDNA_FUSED_HC` — wiki lock
+  default-off until capture-safe
+- `VLLM_GDN_HIP_PREFILL` — GDN prefill HIP is opt-in; default
+  Triton/FLA is not a dest W4 land (`cd1231fd`)
 
-Note: `VLLM_FORCE_CUSTOM_ALL_REDUCE` is dest-default-on in
-`scripts/serve_gfx1030_full.sh` (since 2026-09-16, with TP=4 +
-breakable CG verified correct). It is **not** in the triage list.
-The upstream vLLM env-var default remains `False`; the dest
-launcher overrides it. Env vars and behaviour:
-[rdna-hip-runtime §6, §7](rdna-hip-runtime/SKILL.md).
+Dest-default in launchers (not triage):
+
+- `VLLM_FORCE_CUSTOM_ALL_REDUCE=1` (`849292ec`)
+- `VLLM_USE_BREAKABLE_CUDAGRAPH=1` — admission (poison ops leave
+  the graph), not a capture fix
+- `HSA_FORCE_FINE_GRAIN_PCIE=1`, `GPU_MAX_HW_QUEUES=2`
+
+Env detail: [rdna-hip-runtime §6, §7](../rdna-hip-runtime/SKILL.md).
 
 ## 9. Commit-message format
 
@@ -126,7 +134,7 @@ Dest commits must make family + class + cell obvious at a glance:
 - g reads stayed global, k/w/u/v_new were chunk-local in the
   same per-chunk loop — chunk 0 worked, chunks 1+ read chunk 0 rows.
 - Tests: tests/kernels/test_gdn_prefill_rdna2.py T=64..256 PASS.
-- Soak: TP=4 cg FPP 16k×8 no NaN, decode 31.3 tok/s (was 28.4).
+- Soak: TP=4 graph 16k×8 no NaN. Do not land tok/s as dest.
 ```
 
 Keep the kernel history searchable across forks.

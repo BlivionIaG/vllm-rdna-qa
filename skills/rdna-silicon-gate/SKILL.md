@@ -1,6 +1,6 @@
 ---
 name: rdna-silicon-gate
-description: use this when reviewing HIP / ISA / dot-product instructions on a dest kernel or fatbin for gfx1030.
+description: use this when reviewing HIP / ISA / dot-product instructions on a dest kernel or fatbin for gfx1030. Not for landing classification, ROCm pin, or HTTP clients.
 ---
 
 # Silicon gate
@@ -12,30 +12,29 @@ Depth: [rdna-hip-wiki/silicon](https://github.com/BlivionIaG/rdna-hip-wiki/tree/
 
 ## 1. Wave32, not Wave64
 
-Every dest kernel targets `waveSize = 32`. A Wave64 kernel on
-RDNA2 wastes 31 of 32 lanes on the second wave — a 50% efficiency
-loss, not 2×.
+gfx1030 dest is **wave32 native, WGP default**. Wave64 is not dest.
+`num_warps=4` with wave32 is 128 threads (4×32), not "Wave128".
 
 | Check | How |
 |---|---|
-| Compile target | `--offload-arch=gfx1030`, one arch per `.so` (see [rdna-hip-runtime §2](rdna-hip-runtime/SKILL.md)) |
-| Block size | `block_size_x * num_warps * 32 == block_size`. `num_warps=4` = Wave128, wrong on RDNA2 |
-| Wave flag | `#pragma wave32` or `.wave32` in `.cu` (required in some HIP versions) |
+| Compile target | `--offload-arch=gfx1030`, one arch per `.so` (see [rdna-hip-runtime §2](../rdna-hip-runtime/SKILL.md)) |
+| Block size | threads = waves × 32 |
+| Builtin | `__builtin_amdgcn_fdot2` / `__builtin_amdgcn_sdot4` — hipcc will not peephole `__hfma2` into DOT |
 
-**Never use `HSA_OVERRIDE_GFX_VERSION`** to make a CDNA-tuned
-kernel "work" on gfx1030. Same ISA class, different register
-counts, different LDS budget, different memory ordering — silent
-garbage.
+**Never use `HSA_OVERRIDE_GFX_VERSION`.** Same family, different
+register / LDS / memory ordering — silent garbage.
 
 ## 2. ISA on gfx1030
 
-| ISA | Status | Use |
+Wiki: [valu.md](https://github.com/BlivionIaG/rdna-hip-wiki/blob/main/silicon/valu.md).
+
+| ISA / builtin | Status | Use |
 |---|---|---|
-| `V_DOT2_F32_F16` | native | fp16 GEMM inner loop |
-| `V_DOT4_I32_IU8` / DP4A | native | int8 / W4A16 GEMM |
-| `WMMA` / `TMA` | **not present** | never use directly; Triton AMD path falls back |
-| `MFMA` (matrix cores) | **not present** | CDNA only |
-| BF16 native ops | **not present on gfx1030** | RDNA3 (gfx1100+) only — force fp16 on gfx1030 |
+| `fdot2` (`V_DOT2C_F32_F16`) | **Live dest** | W4A16, W8A16, FP8-storage, mxfp4, EXL3 after unpack, FA QK |
+| `sdot4` (`V_DOT4C_I32_I8`) | native, extras spec | W8A8 INT8 / Sage — live "W8A8" on dest is FP8→`fdot2` |
+| `V_DOT4_I32_IU8` / `sudot4` | **gfx11+** | not on gfx1030 |
+| `WMMA` / `TMA` / `MFMA` | **not present** | Leave |
+| `fdot2.bf16` | gfx11+ | force fp16 on gfx1030 |
 
 A kernel compiled for gfx1100 fails to load on gfx1030 with
 `hipErrorInvalidImage`. Inspect fatbin:
@@ -50,25 +49,25 @@ If it shows gfx1100, build env leaked the wrong arch.
 
 ## 3. K_STEP = packed DOT coverage
 
-- `K_STEP = K` (full): each program covers the whole K in one
-  V_DOT2 chain. **ConfigA = dest**.
-- `K_STEP = K/2`: two programs share K. **ConfigH = Leave**
-  (diagnostic only).
-- `K_STEP = K/4` or finer: wave32 occupancy collapses. Reject.
+Wiki: [w4a16-prefill-config.md](https://github.com/BlivionIaG/rdna-hip-wiki/blob/main/silicon/w4a16-prefill-config.md).
+`K_STEP` is the inner packed-DOT window, not "K of the GEMM".
 
-If a kernel has ConfigH on by default, demote it to env-var opt-in.
+| Config | THREADS / N_TILE / M_TILE / K_STEP / LDS | Status |
+|---|---|---|
+| **A** | 256 / 1024 / 16 / **32** / **0** | **dest** large-M (`7ac98a26`) |
+| V1 / C | K_STEP=32, LDS=0 | live picker cells |
+| **H** | K_STEP=64 | **Leave** — half-K skip class |
+
+If a kernel has ConfigH on by default, demote it. Do not resurrect
+deleted ConfigA_Large / ConfigP.
 
 ## 4. LDS budget
 
-| Path | LDS |
-|---|---|
-| `BLOCK_M=64, BLOCK_N=64`, fp16 | ~16 KiB/block |
-| `BLOCK_M=128, BLOCK_N=128`, fp16 | ~64 KiB/block (max practical) |
-| W4A16 prefill (BM=128, BN=128, packed int4) | ~32–48 KiB |
-| Anything > 64 KiB | Reject — spills to global |
+W4A16 ConfigA/C prefill is **LDS=0** (register tiles). Else LDS ≤
+**64 KiB/WG** (128 KB/WGP pool). >64 KiB/WG Reject.
 
-Use `rocprof-compiler --resource-usage` to inspect. Spills → reduce
-`BLOCK_*` or restructure load order.
+Use occupancy dump / `llvm-objdump` metadata. Spills → reduce
+`BLOCK_*` or split the accumulator — do not "add LDS to ConfigA".
 
 ## 5. AWQ prefill quirk
 
@@ -112,7 +111,7 @@ M-RoPE grafted into a 2D-RoPE path silently mis-aligns positions.
 
 GDN and KDA look similar (both linear-attention state-space
 hybrids) but the kernels are not swappable. Full matrix:
-[rdna-arch-family §2](rdna-arch-family/SKILL.md).
+[rdna-arch-family §2](../rdna-arch-family/SKILL.md).
 
 A "let's share the tiles" PR is almost always wrong. Family binds
 in the dest tree are deliberate.
@@ -124,17 +123,16 @@ hipcc --save-temps -O3 ... -o /tmp/foo.o
 grep -c "sgpr_spill_count" /tmp/foo.s   # > 0 → reject
 ```
 
-Spills mean the kernel needs more registers than the wave allows
-(255 VGPR on gfx1030). Fix by reducing `BLOCK_*` or splitting
-the accumulator. Don't ship a kernel with spills.
+**SGPR is not an occupancy limiter on gfx1030** (wiki
+[sgpr-occupancy.md](https://github.com/BlivionIaG/rdna-hip-wiki/blob/main/silicon/sgpr-occupancy.md)).
+`.sgpr_spill_count > 0` / VGPR spill is **latency poison** — still
+reject. Do not shrink SGPRs to raise waves/EU.
 
 ## 10. µs/tok is not dest
 
-Below 5% decode tok/s gain at the cudagraph-FPP cell, TP=4, 16k×8,
-the soak regression risk outweighs the win — it's "leave", not
-dest. A kernel that breaks cudagraph, TP=4, or any family is
-**never** dest regardless of speed. Soak matrix:
-[rdna-dest-review §7](rdna-dest-review/SKILL.md).
+tok/s is not a dest gate. A kernel that breaks capture, TP=4, or
+a family bind is **never** dest regardless of speed. Soak:
+[rdna-dest-review §7](../rdna-dest-review/SKILL.md).
 
 ## 11. Future-arch note
 

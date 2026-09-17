@@ -1,6 +1,6 @@
 ---
 name: rdna-hip-runtime
-description: use this when checking ROCm version pin, capture runtime, all-reduce mode, or cache wipe after a tip move on the gfx1030 dest fork.
+description: use this when checking ROCm version pin, capture runtime, all-reduce mode, or cache wipe after a tip move on the gfx1030 dest fork. Not for tile ISA, family registry, or HTTP clients.
 ---
 
 # HIP runtime
@@ -79,7 +79,7 @@ bool rdna2_in_capture() {
 }
 ```
 
-Capture invariants in detail: [rdna-graph-qa](rdna-graph-qa/SKILL.md).
+Capture invariants in detail: [rdna-graph-qa](../rdna-graph-qa/SKILL.md).
 
 ## 4. JIT-built kernels (FA-RDNA2)
 
@@ -127,11 +127,12 @@ PCIe P2P, not NVLink-class.
 
 | AR mode | gfx1030 | Why |
 |---|---|---|
-| Uncached staging (Coarse-grained `store`) | **dest** | avoids L2-pollution hot cache; halves stale traffic on captured replay |
-| Finegrained (cache-coherent) | leave | no hardware L2-coherence over PCIe; software flush adds latency |
+| vLLM custom AR (`VLLM_FORCE_CUSTOM_ALL_REDUCE=1`) | **dest launcher** | capture-correct under breakable CG (`849292ec`) |
+| `VLLM_RDNA_AR` Uncached push | **opt-in** | wiki [rdna-allreduce.md](https://github.com/BlivionIaG/rdna-hip-wiki/blob/main/silicon/rdna-allreduce.md); not the launcher default |
+| Finegrained dest fabric | leave | no L2-coherence over PCIe |
 | NVLink / XGMI class | not present | don't ship a config that asks for it |
-| LL / LL128 protocol | leave | deadlocks on PCIe — fix is `NCCL_PROTO=Simple` |
-| MSCCL scheduler | default off | stream-hungry, conflicts with the 8-HQD budget |
+| LL / LL128 protocol | leave | deadlocks on PCIe — `NCCL_PROTO=Simple` |
+| MSCCL scheduler | default off | stream-hungry vs 8-HQD budget |
 
 ### PYNCCL (PIX mode)
 
@@ -154,17 +155,13 @@ DMA-buffer paths.
 
 ```bash
 export VLLM_FORCE_CUSTOM_ALL_REDUCE=1   # dest launcher default
-export VLLM_RDNA_AR_MAX_KB=20480         # AR staging buffer cap (KB)
+export VLLM_RDNA_AR=0                   # one-shot Uncached path stays opt-in
+export VLLM_RDNA_AR_MAX_KB=20480        # cap for VLLM_RDNA_AR only
 ```
 
-Beats PYNCCL by 30–40% at c=1 (small-batch decode where AR is the
-critical path). The dest launcher enables custom AR by default;
-the upstream vLLM env-var default is `False`, but the dest
-launcher flips it to `True`.
-
-On AR correctness issues (compare values across ranks in a probe),
-disable with `VLLM_FORCE_CUSTOM_ALL_REDUCE=0` and fall back to
-PYNCCL.
+The dest launcher enables **custom AR**; upstream env default stays
+`False`. Do not copy tok/s. On AR correctness issues, disable with
+`VLLM_FORCE_CUSTOM_ALL_REDUCE=0` and fall back to PYNCCL.
 
 ## 7. Queue budget — RDNA2 has 8 HQDs
 
