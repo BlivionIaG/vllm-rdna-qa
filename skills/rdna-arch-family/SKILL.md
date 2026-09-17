@@ -1,11 +1,12 @@
 ---
 name: rdna-arch-family
-description: use this when a model family hits the board (Qwen GDN/QSA, GLM KDA/DSA, deepseek_v4 vs v41).
+description: use this when a model family hits the board (Qwen GDN/QSA, GLM KDA/DSA, deepseek_v4 vs v41). Not for dest landing, HIP/ISA, or HTTP clients.
 ---
 
 # Arch family
 
-Briefs: `arch-research/<family>/BRIEF.md`. No papers.
+Briefs: `arch-research/<family>/BRIEF.md`. No papers. Tile hsaco:
+[`rdna-silicon-gate`](../rdna-silicon-gate/SKILL.md).
 
 1. **Never PARK** across the registry: `qwen4_exp` ≠ Qwen3.x GDN+QSA
    ≠ Glm5Next KDA+DSA ≠ `deepseek_v4` ≠ `deepseek_v41`.

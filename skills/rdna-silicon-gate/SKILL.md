@@ -1,13 +1,14 @@
 ---
 name: rdna-silicon-gate
-description: use this when reviewing HIP/ISA on a dest commit or fatbin.
+description: use this when reviewing HIP/ISA on a dest commit or fatbin. Not for landing classification, ROCm pin, or HTTP clients.
 ---
 
 # Silicon gate
 
 Depth:
 [rdna-hip-wiki silicon](https://github.com/BlivionIaG/rdna-hip-wiki/tree/main/silicon).
-No wiki paste. No tok/s.
+No wiki paste. No tok/s. Landing:
+[`rdna-dest-review`](../rdna-dest-review/SKILL.md).
 
 1. **`fdot2` / `sdot4`**, wave32. One `--offload-arch`. Never
    `HSA_OVERRIDE`. Leave WMMA / TMA / `#ifdef WMMA` on shared DOT.
@@ -22,4 +23,3 @@ No wiki paste. No tok/s.
    `.sgpr_spill_count > 0` / VGPR spill.
 6. **gfx1013 Later:** BC-250 is Cyan Skillfish, not gfx906. VERIFY
    wave before sharing `dot.hpp` with gfx1030.
-7. **Leave** µs/tok and permanent TP≤2 / breakable CG as dest.
